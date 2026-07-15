@@ -228,6 +228,8 @@
     .field-row{flex-direction:column;}
   }
 </style>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <header>
@@ -867,11 +869,100 @@ function updateClock(){
 updateClock();
 setInterval(updateClock,10000);
 
-// Googleカレンダー接続（次ステップで実装）
-document.getElementById("cal-connect").onclick=()=>{
-  const body=document.getElementById("cal-body");
-  body.innerHTML=`<p class="cal-status">Googleカレンダー連携はこのあと設定します。接続にはGoogle側の許可設定が必要なため、準備ができたらこのボタンから繋げられるようにします。</p>`;
-};
+// ===== Googleカレンダー連携 =====
+const GCAL_CLIENT_ID="667308272073-2jnm8ji28il709ufdiea0d7jgfpbvorh.apps.googleusercontent.com";
+const GCAL_SCOPE="https://www.googleapis.com/auth/calendar.readonly";
+const GCAL_DISCOVERY="https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest";
+let gapiReady=false,gisReady=false,tokenClient=null,gcalToken=null;
+
+function gcalSetStatus(html){document.getElementById("cal-body").innerHTML=html;}
+
+// ライブラリ読み込みを待つ
+function waitForGoogleLibs(){
+  const iv=setInterval(()=>{
+    if(window.gapi&&window.google&&google.accounts&&google.accounts.oauth2){
+      clearInterval(iv);
+      gapi.load("client",async()=>{
+        try{
+          await gapi.client.init({discoveryDocs:[GCAL_DISCOVERY]});
+          gapiReady=true;
+          tokenClient=google.accounts.oauth2.initTokenClient({
+            client_id:GCAL_CLIENT_ID,scope:GCAL_SCOPE,
+            callback:(resp)=>{
+              if(resp.error){gcalSetStatus(`<p class="cal-status">接続に失敗しました。もう一度お試しください。</p>`);return;}
+              gcalToken=resp.access_token;
+              try{sessionStorage.setItem("gcal_token",gcalToken);}catch(e){}
+              loadTodayEvents();
+            }
+          });
+          gisReady=true;
+          // 既存トークンがあれば自動で読み込み
+          let saved=null;try{saved=sessionStorage.getItem("gcal_token");}catch(e){}
+          if(saved){gcalToken=saved;gapi.client.setToken({access_token:saved});loadTodayEvents();}
+        }catch(e){gcalSetStatus(`<p class="cal-status">カレンダー機能の準備中に問題が発生しました。ページを再読み込みしてください。</p>`);}
+      });
+    }
+  },300);
+}
+waitForGoogleLibs();
+
+function gcalConnect(){
+  if(!gisReady||!tokenClient){gcalSetStatus(`<p class="cal-status">準備中です。数秒待ってからもう一度押してください。</p>`);return;}
+  gcalSetStatus(`<p class="cal-status">Googleの許可画面を開いています…</p>`);
+  tokenClient.requestAccessToken({prompt:gcalToken?"":"consent"});
+}
+
+async function loadTodayEvents(){
+  if(!gapiReady){return;}
+  gcalSetStatus(`<p class="cal-status">予定を読み込んでいます…</p>`);
+  try{
+    if(gcalToken)gapi.client.setToken({access_token:gcalToken});
+    const now=new Date();
+    const start=new Date(now.getFullYear(),now.getMonth(),now.getDate(),0,0,0);
+    const end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);
+    const resp=await gapi.client.calendar.events.list({
+      calendarId:"primary",timeMin:start.toISOString(),timeMax:end.toISOString(),
+      showDeleted:false,singleEvents:true,orderBy:"startTime"
+    });
+    renderEvents(resp.result.items||[]);
+  }catch(e){
+    // トークン切れなどは再接続を促す
+    let btn=`<button class="btn-ghost cal-connect" id="cal-connect">再接続する</button>`;
+    gcalSetStatus(`<p class="cal-status">予定の取得に失敗しました。接続の有効期限が切れた可能性があります。</p>${btn}`);
+    try{sessionStorage.removeItem("gcal_token");}catch(_){}
+    gcalToken=null;
+    document.getElementById("cal-connect").onclick=gcalConnect;
+  }
+}
+
+function renderEvents(items){
+  if(!items.length){
+    gcalSetStatus(`<p class="cal-status">今日の予定はありません。</p>
+      <button class="btn-ghost cal-connect" id="cal-refresh" style="margin-top:6px;">更新</button>`);
+    document.getElementById("cal-refresh").onclick=loadTodayEvents;
+    return;
+  }
+  const rows=items.map(ev=>{
+    let timeLabel;
+    if(ev.start.date){timeLabel="終日";}
+    else{
+      const s=new Date(ev.start.dateTime);
+      const hh=String(s.getHours()).padStart(2,"0");
+      const mm=String(s.getMinutes()).padStart(2,"0");
+      let label=`${hh}:${mm}`;
+      if(ev.end&&ev.end.dateTime){
+        const e=new Date(ev.end.dateTime);
+        label+=`–${String(e.getHours()).padStart(2,"0")}:${String(e.getMinutes()).padStart(2,"0")}`;
+      }
+      timeLabel=label;
+    }
+    return `<div class="cal-event"><span class="ce-time">${timeLabel}</span><span class="ce-title">${escapeHtml(ev.summary||"（無題）")}</span></div>`;
+  }).join("");
+  gcalSetStatus(rows+`<div style="text-align:right;margin-top:6px;"><button class="btn-ghost" id="cal-refresh" style="font-size:11px;padding:4px 10px;">更新</button></div>`);
+  document.getElementById("cal-refresh").onclick=loadTodayEvents;
+}
+
+document.getElementById("cal-connect").onclick=gcalConnect;
 
 const wp=document.getElementById("weekday-picker");
 WD.forEach((w,i)=>{const c=document.createElement("div");c.className="chip";c.textContent=w;c.dataset.wd=i;
