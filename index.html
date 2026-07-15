@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイタスク</title>
+<style>
+  :root{
+    --paper:#f4f1ea;
+    --paper-2:#faf8f3;
+    --ink:#3a3630;
+    --ink-soft:#6b655c;
+    --ink-faint:#9a938a;
+    --line:#e0d9cc;
+    --line-soft:#ebe5da;
+    --terracotta:#c06a48;
+    --terracotta-bg:#f2e2d8;
+    --sage:#7a8a6b;
+    --sage-bg:#e6e9dd;
+    --amber:#c99a3f;
+    --amber-bg:#f3e8cf;
+    --red:#b5533f;
+    --red-bg:#f0dcd5;
+    --white:#fffdf8;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(58,54,48,0.06),0 2px 8px rgba(58,54,48,0.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Segoe UI",sans-serif;
+    line-height:1.6;-webkit-text-size-adjust:100%;}
+  body{max-width:980px;margin:0 auto;padding:24px 18px 80px;}
+
+  header{margin-bottom:20px;}
+  h1{font-size:26px;font-weight:600;letter-spacing:0.02em;display:flex;align-items:center;gap:10px;}
+  h1 .star{color:var(--terracotta);font-size:22px;}
+  .subtitle{color:var(--ink-soft);font-size:13px;margin-top:2px;}
+
+  .head-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .clock{text-align:right;flex-shrink:0;}
+  .clock-date{font-size:13px;color:var(--ink-soft);}
+  .clock-time{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:0.01em;line-height:1.1;color:var(--ink);}
+
+  .cal-panel{margin-top:16px;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 14px;box-shadow:var(--shadow);}
+  .cal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+  .cal-title{font-size:14px;font-weight:600;color:var(--ink);}
+  .cal-connect{font-size:12px;padding:6px 12px;}
+  .cal-body{margin-top:8px;}
+  .cal-hint{font-size:12.5px;color:var(--ink-faint);}
+  .cal-event{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px dashed var(--line-soft);font-size:14px;}
+  .cal-event:first-child{border-top:none;}
+  .cal-event .ce-time{font-variant-numeric:tabular-nums;color:var(--terracotta);font-weight:500;flex-shrink:0;min-width:88px;}
+  .cal-event .ce-title{color:var(--ink);word-break:break-word;}
+  .cal-status{font-size:12.5px;color:var(--ink-soft);}
+
+  .portal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+  .portal-card-wrap{position:relative;}
+  .portal-card{position:relative;display:flex;align-items:center;gap:10px;padding:12px 13px;
+    background:var(--paper-2);border:1px solid var(--line);border-left:4px solid var(--pc,var(--terracotta));
+    border-radius:var(--radius);box-shadow:var(--shadow);text-decoration:none;color:var(--ink);
+    transition:transform .1s,box-shadow .15s;}
+  .portal-card:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(58,54,48,0.1);}
+  .portal-icon{font-size:22px;line-height:1;flex-shrink:0;}
+  .portal-name{font-size:14px;font-weight:500;word-break:break-word;padding-right:36px;}
+  .portal-btns{position:absolute;top:4px;right:4px;display:flex;gap:2px;opacity:0;transition:opacity .12s;}
+  .portal-card-wrap:hover .portal-btns{opacity:1;}
+  .portal-mini{width:24px;height:24px;border-radius:6px;font-size:12px;color:var(--ink-faint);
+    background:var(--paper);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;transition:all .12s;}
+  .portal-mini:hover{background:var(--terracotta-bg);color:var(--terracotta);}
+  .portal-mini[data-portal-del]:hover{background:var(--red-bg);color:var(--red);}
+
+  .color-picker{display:flex;gap:8px;flex-wrap:wrap;}
+  .color-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s;}
+  .color-dot:hover{transform:scale(1.12);}
+  .color-dot.on{border-color:var(--ink);}
+
+  .emoji-picker{display:flex;gap:5px;flex-wrap:wrap;}
+  .emoji-opt{width:36px;height:36px;font-size:19px;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);border-radius:8px;background:var(--white);cursor:pointer;transition:all .1s;}
+  .emoji-opt:hover{border-color:var(--ink-faint);}
+  .emoji-opt.on{border-color:var(--ink);background:var(--terracotta-bg);}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(58,54,48,0.4);display:none;
+    align-items:center;justify-content:center;padding:18px;z-index:100;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:var(--paper);border-radius:14px;padding:20px;width:100%;max-width:440px;
+    max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(58,54,48,0.25);}
+  .modal-box h3{font-size:16px;margin-bottom:14px;}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;}
+  .modal-actions .btn{flex:1;}
+
+  .ship-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--paper-2);
+    border:1px solid var(--line);border-radius:var(--radius);margin-bottom:8px;box-shadow:var(--shadow);}
+  .ship-date{flex-shrink:0;text-align:center;min-width:56px;padding:4px 6px;background:var(--terracotta-bg);
+    border-radius:8px;line-height:1.2;}
+  .ship-date .sd-day{font-size:20px;font-weight:600;color:var(--terracotta);font-variant-numeric:tabular-nums;}
+  .ship-date .sd-mon{font-size:11px;color:var(--terracotta);}
+  .ship-date.soon{background:var(--red-bg);}
+  .ship-date.soon .sd-day,.ship-date.soon .sd-mon{color:var(--red);}
+  .ship-body{flex:1;min-width:0;}
+  .ship-to{font-size:15px;font-weight:500;word-break:break-word;}
+  .ship-days{font-size:12px;color:var(--ink-soft);margin-left:8px;font-weight:400;}
+  .ship-note{font-size:13px;color:var(--ink-soft);margin-top:4px;white-space:pre-wrap;word-break:break-word;}
+  .ship-note a{color:var(--terracotta);text-decoration:underline;word-break:break-all;}
+  .ship-actions{flex-shrink:0;display:flex;gap:2px;}
+  .ship-mini{width:28px;height:28px;border-radius:6px;color:var(--ink-faint);
+    display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .12s;}
+  .ship-mini:hover{background:var(--terracotta-bg);color:var(--terracotta);}
+  .ship-mini[data-ship-del]:hover{background:var(--red-bg);color:var(--red);}
+
+  input[type=text],input[type=date],input[type=number],select,textarea{
+    font-family:inherit;font-size:15px;color:var(--ink);background:var(--white);
+    border:1px solid var(--line);border-radius:8px;padding:9px 11px;outline:none;transition:border-color .15s;}
+  input[type=text]:focus,input[type=date]:focus,input[type=number]:focus,select:focus,textarea:focus{
+    border-color:var(--terracotta);}
+  input::placeholder,textarea::placeholder{color:var(--ink-faint);}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:15px;}
+  .btn{background:var(--ink);color:var(--paper-2);border-radius:8px;padding:9px 16px;font-weight:500;
+    transition:opacity .15s,transform .1s;}
+  .btn:hover{opacity:.88;}
+  .btn:active{transform:scale(.97);}
+  .btn-ghost{border:1px solid var(--line);background:var(--white);border-radius:8px;padding:8px 14px;color:var(--ink-soft);}
+  .btn-ghost:hover{border-color:var(--ink-faint);}
+  textarea{resize:vertical;min-height:52px;width:100%;}
+
+  .columns{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:8px;align-items:start;}
+
+  .sec-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;
+    border-bottom:2px solid var(--ink);position:relative;}
+  .sec-head::after{content:"";position:absolute;left:0;bottom:-2px;width:46px;height:2px;background:var(--terracotta);}
+  .sec-head h2{font-size:18px;font-weight:600;}
+  .sec-head .count{font-size:13px;color:var(--ink-faint);}
+  .sec-head .add-toggle{margin-left:auto;background:var(--terracotta-bg);color:var(--terracotta);
+    border-radius:7px;width:30px;height:30px;font-size:20px;font-weight:400;line-height:1;
+    display:flex;align-items:center;justify-content:center;transition:all .12s;}
+  .sec-head .add-toggle:hover{background:var(--terracotta);color:var(--white);}
+  .sec-head .add-toggle.open{background:var(--ink);color:var(--paper-2);}
+
+  .addform{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;margin-bottom:14px;box-shadow:var(--shadow);display:none;}
+  .addform.open{display:block;}
+  .field{display:flex;flex-direction:column;gap:4px;margin-bottom:11px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{font-size:12px;color:var(--ink-soft);font-weight:500;letter-spacing:.02em;}
+  .field-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .field-row .field{flex:1;min-width:120px;}
+
+  .weekday-picker,.monthday-picker,.yearly-picker{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{padding:5px 10px;border:1px solid var(--line);border-radius:20px;font-size:13px;
+    background:var(--white);color:var(--ink-soft);cursor:pointer;user-select:none;transition:all .12s;}
+  .chip.on{background:var(--terracotta-bg);border-color:var(--terracotta);color:var(--terracotta);font-weight:500;}
+  .repeat-detail>div{display:none;}
+  .repeat-detail>div.show{display:block;}
+
+  .task{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:9px 11px;margin-bottom:7px;box-shadow:var(--shadow);transition:box-shadow .15s,opacity .2s;}
+  .task.done{opacity:.55;}
+  .task.dragging{opacity:.4;}
+  .task.drag-over{border-color:var(--terracotta);border-style:dashed;}
+  .task-row{display:flex;align-items:center;gap:9px;}
+  .check{width:24px;height:24px;border:2px solid var(--ink-faint);border-radius:50%;flex-shrink:0;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;background:var(--white);}
+  .check:hover{border-color:var(--sage);}
+  .check.on{background:var(--sage);border-color:var(--sage);color:var(--white);font-size:12px;}
+  .task-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .task-title{font-size:15px;font-weight:500;word-break:break-word;}
+  .task.done .task-title{text-decoration:line-through;color:var(--ink-soft);}
+  .tag{font-size:11px;padding:1px 8px;border-radius:6px;font-weight:500;white-space:nowrap;flex-shrink:0;}
+  .tag-prio-high{background:var(--red-bg);color:var(--red);}
+  .tag-prio-mid{background:var(--amber-bg);color:var(--amber);}
+  .tag-prio-low{background:var(--line-soft);color:var(--ink-soft);}
+  .tag-due{background:var(--terracotta-bg);color:var(--terracotta);}
+  .tag-do{background:var(--sage-bg);color:var(--sage);}
+  .tag-rep{background:var(--white);border:1px solid var(--line);color:var(--ink-soft);}
+  .tag-overdue{background:var(--red);color:var(--white);}
+  .task-actions{display:flex;gap:1px;flex-shrink:0;align-items:center;}
+  .icon-btn{width:27px;height:27px;border-radius:6px;color:var(--ink-faint);display:flex;align-items:center;
+    justify-content:center;font-size:14px;transition:all .12s;}
+  .icon-btn:hover{background:var(--line-soft);color:var(--ink);}
+  .icon-btn.has-note{color:var(--terracotta);}
+  .drag-handle{cursor:grab;color:var(--ink-faint);font-size:16px;padding:0 2px;user-select:none;flex-shrink:0;touch-action:none;}
+  .drag-handle:active{cursor:grabbing;}
+  .task-note{font-size:13px;color:var(--ink-soft);margin-top:8px;white-space:pre-wrap;word-break:break-word;
+    padding:8px 0 2px 10px;border-left:2px solid var(--line);margin-left:29px;display:none;}
+  .task-note.show{display:block;}
+  .task-note a{color:var(--terracotta);text-decoration:underline;text-underline-offset:2px;word-break:break-all;}
+
+  .task.today{background:linear-gradient(var(--paper-2),var(--paper-2)) padding-box,var(--terracotta) border-box;
+    border:1px solid transparent;box-shadow:0 0 0 1px var(--terracotta-bg),var(--shadow);}
+  .task.today::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:var(--terracotta);border-radius:var(--radius) 0 0 var(--radius);}
+  .task{position:relative;}
+
+  .tools-bar{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;padding:8px 10px;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:8px;}
+  .tool-group{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .tool-label{font-size:11px;color:var(--ink-faint);margin-right:2px;}
+  .tool-btn{font-size:12px;padding:4px 10px;border-radius:14px;border:1px solid var(--line);
+    background:var(--white);color:var(--ink-soft);transition:all .12s;}
+  .tool-btn:hover{border-color:var(--ink-faint);}
+  .tool-btn.on{background:var(--ink);color:var(--paper-2);border-color:var(--ink);}
+
+  .empty{text-align:center;color:var(--ink-faint);font-size:14px;padding:20px;
+    border:1px dashed var(--line);border-radius:var(--radius);background:var(--paper-2);}
+  .hint{font-size:12px;color:var(--ink-faint);margin-bottom:10px;}
+
+  .history-sec{margin-top:28px;}
+  .history-sec details{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);padding:4px 14px;}
+  .history-sec summary{cursor:pointer;font-size:14px;color:var(--ink-soft);padding:9px 0;font-weight:500;list-style:none;}
+  .history-sec summary::-webkit-details-marker{display:none;}
+  .history-sec summary::before{content:"▸ ";color:var(--ink-faint);}
+  .history-sec details[open] summary::before{content:"▾ ";}
+  .hist-item{font-size:13px;color:var(--ink-soft);padding:7px 0;border-top:1px dashed var(--line-soft);
+    display:flex;justify-content:space-between;gap:10px;}
+  .hist-item .ht{color:var(--ink);}
+  .hist-clear{font-size:12px;color:var(--red);margin:8px 0;display:inline-block;cursor:pointer;}
+
+  .edit-form{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);margin-left:29px;}
+
+  @media (max-width:760px){
+    .columns{grid-template-columns:1fr;gap:0;}
+    #repeat-sec{margin-top:28px;}
+  }
+  @media (max-width:520px){
+    body{padding:18px 12px 70px;}
+    h1{font-size:22px;}
+    .field-row{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-top">
+    <div>
+      <h1><span class="star">✳</span>業務ダッシュボード</h1>
+      <p class="subtitle">今日やることを、ひと目で</p>
+    </div>
+    <div class="clock">
+      <div class="clock-date" id="clock-date">—</div>
+      <div class="clock-time" id="clock-time">—</div>
+    </div>
+  </div>
+
+  <div class="cal-panel" id="cal-panel">
+    <div class="cal-head">
+      <span class="cal-title">📅 今日の予定</span>
+      <button class="btn-ghost cal-connect" id="cal-connect">Googleカレンダーと接続</button>
+    </div>
+    <div class="cal-body" id="cal-body">
+      <p class="cal-hint">接続すると、Googleカレンダーの今日の予定がここに表示されます。</p>
+    </div>
+  </div>
+</header>
+
+<section id="portal-sec">
+  <div class="sec-head">
+    <h2>ポータル</h2><span class="count" id="portal-count"></span>
+    <button class="add-toggle" id="portal-add-toggle" aria-label="リンクを追加">＋</button>
+  </div>
+  <div class="addform" id="portal-form">
+    <div class="field"><label>名前</label><input type="text" id="p-name" placeholder="例：勤怠管理システム"></div>
+    <div class="field"><label>URL</label><input type="text" id="p-url" placeholder="https://…"></div>
+    <div class="field">
+      <label>アイコン</label>
+      <div class="emoji-picker" id="p-emoji-picker"></div>
+    </div>
+    <div class="field">
+      <label>色</label>
+      <div class="color-picker" id="p-color-picker"></div>
+    </div>
+    <button class="btn" id="p-add">追加する</button>
+  </div>
+  <div class="portal-grid" id="portal-grid"></div>
+</section>
+
+<div class="columns">
+  <section id="normal-sec">
+    <div class="sec-head">
+      <h2>通常タスク</h2><span class="count" id="normal-count"></span>
+      <button class="add-toggle" id="normal-add-toggle" aria-label="通常タスクを追加">＋</button>
+    </div>
+
+    <div class="addform" id="normal-form">
+      <div class="field">
+        <label>タスク名</label>
+        <input type="text" id="n-title" placeholder="やることを入力…">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>優先度</label>
+          <select id="n-prio">
+            <option value="low">低</option>
+            <option value="mid" selected>中</option>
+            <option value="high">高</option>
+          </select>
+        </div>
+        <div class="field"><label>期日（締切）</label><input type="date" id="n-due"></div>
+        <div class="field"><label>実行日</label><input type="date" id="n-do"></div>
+      </div>
+      <div class="field">
+        <label>メモ（URLは自動リンク）</label>
+        <textarea id="n-note" placeholder="補足やURLなど…"></textarea>
+      </div>
+      <button class="btn" id="n-add">追加する</button>
+    </div>
+
+    <div class="tools-bar" id="normal-tools">
+      <div class="tool-group">
+        <span class="tool-label">並び</span>
+        <button class="tool-btn on" data-sort="date">日付順</button>
+        <button class="tool-btn" data-sort="prio">優先度順</button>
+      </div>
+      <div class="tool-group">
+        <span class="tool-label">絞込</span>
+        <button class="tool-btn" data-filter="active">未完了のみ</button>
+        <button class="tool-btn" data-filter="today">今日まで</button>
+        <button class="tool-btn" data-filter="high">高優先のみ</button>
+      </div>
+    </div>
+
+    <div id="normal-list"></div>
+  </section>
+
+  <section id="repeat-sec">
+    <div class="sec-head">
+      <h2>繰り返しタスク</h2><span class="count" id="repeat-count"></span>
+      <button class="add-toggle" id="repeat-add-toggle" aria-label="繰り返しタスクを追加">＋</button>
+    </div>
+
+    <div class="addform" id="repeat-form">
+      <div class="field">
+        <label>タスク名</label>
+        <input type="text" id="r-title" placeholder="繰り返すことを入力…">
+      </div>
+      <div class="field">
+        <label>繰り返しパターン</label>
+        <select id="r-rep-type">
+          <option value="daily">毎日</option>
+          <option value="weekly">毎週（曜日指定）</option>
+          <option value="monthly">毎月（日付指定）</option>
+          <option value="everyN">◯日ごと</option>
+          <option value="yearly">毎年（月日指定）</option>
+        </select>
+      </div>
+      <div class="repeat-detail" id="repeat-detail">
+        <div data-rep="weekly">
+          <div class="field"><label>曜日（複数選択可）</label><div class="weekday-picker" id="weekday-picker"></div></div>
+        </div>
+        <div data-rep="monthly">
+          <div class="field"><label>日付（複数選択可）</label><div class="monthday-picker" id="monthday-picker"></div></div>
+        </div>
+        <div data-rep="everyN">
+          <div class="field"><label>間隔</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="r-everyN" min="1" value="3" style="width:80px;"> 日ごと
+            </div>
+          </div>
+        </div>
+        <div data-rep="yearly">
+          <div class="field"><label>月日（複数選択可）</label>
+            <div class="yearly-picker" id="yearly-picker"></div>
+            <button class="btn-ghost" id="yearly-add" style="margin-top:8px;font-size:13px;padding:5px 12px;">＋ 月日を追加</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>次回の実行日（未入力ならパターンから自動計算）</label>
+        <input type="date" id="r-do">
+      </div>
+      <div class="field">
+        <label>メモ（URLは自動リンク）</label>
+        <textarea id="r-note" placeholder="補足やURLなど…"></textarea>
+      </div>
+      <button class="btn" id="r-add">追加する</button>
+    </div>
+
+    <p class="hint">☰ を掴んで並べ替えできます</p>
+    <div id="repeat-list"></div>
+  </section>
+</div>
+
+<section id="ship-sec">
+  <div class="sec-head">
+    <h2>直送予定</h2><span class="count" id="ship-count"></span>
+    <button class="add-toggle" id="ship-add-toggle" aria-label="直送予定を追加">＋</button>
+  </div>
+  <div class="addform" id="ship-form">
+    <div class="field-row">
+      <div class="field"><label>出荷日</label><input type="date" id="s-date"></div>
+      <div class="field" style="flex:2;"><label>送り先</label><input type="text" id="s-to" placeholder="例：岩手第二工場"></div>
+    </div>
+    <div class="field"><label>備考</label><textarea id="s-note" placeholder="品目・数量・伝票番号など…"></textarea></div>
+    <button class="btn" id="s-add">追加する</button>
+  </div>
+  <div id="ship-list"></div>
+</section>
+
+<section class="history-sec">
+  <div class="sec-head"><h2>完了履歴</h2></div>
+  <details>
+    <summary id="hist-summary">これまでに完了したタスク</summary>
+    <div id="hist-list"></div>
+    <span class="hist-clear" id="hist-clear">履歴をすべて消去</span>
+  </details>
+</section>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal-box" id="edit-modal-box"></div>
+</div>
+
+<script>
+"use strict";
+const KEY="mytask_app_v1";
+const WD=["日","月","火","水","木","金","土"];
+let state={tasks:[],history:[],portals:[],shipments:[]};
+
+function load(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r){state=r;}}catch(e){}migrate();}
+function migrate(){
+  const today=todayStr();let changed=false;
+  if(!Array.isArray(state.portals)){state.portals=[];changed=true;}
+  if(!Array.isArray(state.shipments)){state.shipments=[];changed=true;}
+  (state.tasks||[]).forEach(t=>{
+    if(t.type==="repeat"){
+      if(!t.doDate){
+        t.doDate=isDueToday(t)?today:calcNextDo(t,today);changed=true;
+      }
+      if("prio" in t){delete t.prio;changed=true;}
+      if("due" in t){delete t.due;changed=true;}
+    }
+  });
+  if(changed)save();
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function fmtDate(d){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function todayStr(){return fmtDate(new Date());}
+
+let normalSort="date";
+let normalFilters={active:false,today:false,high:false};
+function baseDate(t){
+  const ds=[t.doDate,t.due].filter(Boolean);
+  return ds.length?ds.sort()[0]:"9999-12-31";
+}
+const prioRank={high:0,mid:1,low:2};
+function sortNormals(arr){
+  const a=arr.slice();
+  if(normalSort==="prio"){
+    a.sort((x,y)=>(prioRank[x.prio]-prioRank[y.prio])||baseDate(x).localeCompare(baseDate(y)));
+  }else{
+    a.sort((x,y)=>baseDate(x).localeCompare(baseDate(y))||(prioRank[x.prio]-prioRank[y.prio]));
+  }
+  return a;
+}
+function filterNormals(arr){
+  const today=todayStr();
+  return arr.filter(t=>{
+    if(normalFilters.active&&t.done)return false;
+    if(normalFilters.high&&t.prio!=="high")return false;
+    if(normalFilters.today){if(baseDate(t)>today)return false;}
+    return true;
+  });
+}
+
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function linkify(text){
+  const esc=escapeHtml(text);
+  return esc.replace(/(https?:\/\/[^\s<]+)/g,u=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+}
+
+function repeatLabel(t){
+  const r=t.repeat;if(!r)return"";
+  if(r.type==="daily")return"毎日";
+  if(r.type==="weekly")return"毎週 "+(r.weekdays||[]).map(d=>WD[d]).join("・");
+  if(r.type==="monthly")return"毎月 "+(r.monthdays||[]).join("・")+"日";
+  if(r.type==="everyN")return r.n+"日ごと";
+  if(r.type==="yearly")return"毎年 "+(r.yeardays||[]).map(x=>`${x.m}/${x.d}`).join("・");
+  return"";
+}
+
+function calcNextDo(t,fromStr){
+  const r=t.repeat;if(!r)return"";
+  const from=fromStr?new Date(fromStr+"T00:00:00"):new Date(todayStr()+"T00:00:00");
+  const next=new Date(from);next.setDate(next.getDate()+1);
+  function fmt(d){return fmtDate(d);}
+  if(r.type==="daily"){return fmt(next);}
+  if(r.type==="everyN"){const d=new Date(from);d.setDate(d.getDate()+Math.max(1,r.n||1));return fmt(d);}
+  if(r.type==="weekly"){
+    const days=(r.weekdays||[]).slice().sort((a,b)=>a-b);if(!days.length)return fmt(next);
+    for(let i=1;i<=7;i++){const d=new Date(from);d.setDate(d.getDate()+i);if(days.includes(d.getDay()))return fmt(d);}
+    return fmt(next);
+  }
+  if(r.type==="monthly"){
+    const days=(r.monthdays||[]).map(Number).sort((a,b)=>a-b);if(!days.length)return fmt(next);
+    for(let i=1;i<=62;i++){const d=new Date(from);d.setDate(d.getDate()+i);if(days.includes(d.getDate()))return fmt(d);}
+    return fmt(next);
+  }
+  if(r.type==="yearly"){
+    const list=(r.yeardays||[]);if(!list.length)return fmt(next);
+    let best=null;
+    for(let yr=0;yr<=1;yr++){
+      for(const md of list){
+        const d=new Date(from.getFullYear()+yr,md.m-1,md.d);
+        if(d>from&&(!best||d<best))best=d;
+      }
+    }
+    return best?fmt(best):fmt(next);
+  }
+  return fmt(next);
+}
+
+function overdue(dateStr){return dateStr&&dateStr<todayStr();}
+
+function isDueToday(t){
+  const r=t.repeat;if(!r)return false;
+  const d=new Date(todayStr()+"T00:00:00");
+  if(r.type==="daily")return true;
+  if(r.type==="everyN")return true;
+  if(r.type==="weekly")return(r.weekdays||[]).includes(d.getDay());
+  if(r.type==="monthly")return(r.monthdays||[]).map(Number).includes(d.getDate());
+  if(r.type==="yearly")return(r.yeardays||[]).some(md=>md.m===d.getMonth()+1&&md.d===d.getDate());
+  return false;
+}
+
+function taskHtml(t){
+  const done=t.done?"done":"";
+  let tags="";
+  if(t.type==="normal"){
+    const pl={high:"高",mid:"中",low:"低"};
+    tags+=`<span class="tag tag-prio-${t.prio}">${pl[t.prio]}</span>`;
+    if(t.due){const od=!t.done&&overdue(t.due);tags+=`<span class="tag ${od?"tag-overdue":"tag-due"}">締切${t.due.slice(5)}${od?"⚠":""}</span>`;}
+    if(t.doDate){tags+=`<span class="tag tag-do">実行${t.doDate.slice(5)}</span>`;}
+  }else{
+    if(t.doDate){tags+=`<span class="tag tag-do">次回${t.doDate.slice(5)}</span>`;}
+    tags+=`<span class="tag tag-rep">🔁${escapeHtml(repeatLabel(t))}</span>`;
+  }
+  const handle=t.type==="repeat"?`<span class="drag-handle" aria-label="並べ替え">☰</span>`:"";
+  const noteBtn=t.note?`<button class="icon-btn has-note" data-act="note" aria-label="メモを表示">📝</button>`:"";
+  const noteBlock=t.note?`<div class="task-note" data-note><div>${linkify(t.note)}</div></div>`:"";
+  const isToday=t.type==="normal"&&!t.done&&((t.doDate&&t.doDate===todayStr())||(t.due&&t.due===todayStr()));
+  return `<div class="task ${done} ${isToday?"today":""}" data-id="${t.id}" data-type="${t.type}">
+    <div class="task-row">
+      <div class="check ${t.done?"on":""}" data-act="check">${t.done?"✓":""}</div>
+      <div class="task-main">
+        <span class="task-title">${escapeHtml(t.title)}</span>
+        ${tags}
+      </div>
+      <div class="task-actions">
+        ${noteBtn}
+        <button class="icon-btn" data-act="edit" aria-label="編集">✎</button>
+        <button class="icon-btn" data-act="del" aria-label="削除">🗑</button>
+        ${handle}
+      </div>
+    </div>
+    ${noteBlock}
+  </div>`;
+}
+
+function render(){
+  const today=todayStr();
+  const normalsAll=state.tasks.filter(t=>t.type==="normal");
+  const normals=sortNormals(filterNormals(normalsAll));
+  const allRepeats=state.tasks.filter(t=>t.type==="repeat");
+  const repeats=allRepeats.filter(t=>!t.doDate||t.doDate<=today);
+  const nl=document.getElementById("normal-list");
+  const rl=document.getElementById("repeat-list");
+  nl.innerHTML=normals.length?normals.map(taskHtml).join(""):`<div class="empty">条件に合う通常タスクはありません</div>`;
+  rl.innerHTML=repeats.length?repeats.map(taskHtml).join(""):`<div class="empty">今日やる繰り返しタスクはありません</div>`;
+  document.getElementById("normal-count").textContent=normalsAll.filter(t=>!t.done).length+" 件";
+  document.getElementById("repeat-count").textContent=repeats.length+" 件";
+
+  const hl=document.getElementById("hist-list");
+  if(state.history.length){
+    hl.innerHTML=state.history.slice().reverse().slice(0,100).map(h=>
+      `<div class="hist-item"><span class="ht">${escapeHtml(h.title)}</span><span>${h.date}</span></div>`).join("");
+  }else{hl.innerHTML=`<div class="hist-item" style="border:none;color:var(--ink-faint);">まだありません</div>`;}
+  document.getElementById("hist-summary").textContent=`これまでに完了したタスク（${state.history.length}件）`;
+  renderPortals();
+  renderShipments();
+  save();
+}
+
+const PORTAL_COLORS=["#c06a48","#b5533f","#cc8b3c","#c99a3f","#7a8a6b","#5f8a5f","#4f8a7b","#5a7d9a","#5a6a9a","#8a6a9a","#9a6a8a","#6b655c"];
+function renderPortals(){
+  const grid=document.getElementById("portal-grid");
+  const ps=state.portals||[];
+  document.getElementById("portal-count").textContent=ps.length+" 件";
+  if(!ps.length){grid.innerHTML=`<div class="empty" style="grid-column:1/-1;">リンクはまだありません。＋から追加できます。</div>`;return;}
+  grid.innerHTML=ps.map(p=>`
+    <div class="portal-card-wrap" data-portal-id="${p.id}">
+      <a class="portal-card" href="${encodeURI(p.url)}" target="_blank" rel="noopener" style="--pc:${p.color};">
+        <span class="portal-icon">${escapeHtml(p.icon||"🔗")}</span>
+        <span class="portal-name">${escapeHtml(p.name)}</span>
+      </a>
+      <div class="portal-btns">
+        <button class="portal-mini" data-portal-edit="${p.id}" aria-label="編集" title="編集">✎</button>
+        <button class="portal-mini" data-portal-del="${p.id}" aria-label="削除" title="削除">✕</button>
+      </div>
+    </div>`).join("");
+}
+
+function renderShipments(){
+  const list=document.getElementById("ship-list");
+  const today=todayStr();
+  const upcoming=(state.shipments||[]).filter(s=>s.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById("ship-count").textContent=upcoming.length+" 件";
+  if(!upcoming.length){list.innerHTML=`<div class="empty">予定されている直送はありません。＋から追加できます。</div>`;return;}
+  const MON=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+  list.innerHTML=upcoming.map(s=>{
+    const d=new Date(s.date+"T00:00:00");
+    const diff=Math.round((d-new Date(today+"T00:00:00"))/86400000);
+    const soon=diff<=2;
+    const dayLabel=diff===0?"今日":diff===1?"明日":`あと${diff}日`;
+    const note=s.note?`<div class="ship-note">${linkify(s.note)}</div>`:"";
+    return `<div class="ship-item">
+      <div class="ship-date ${soon?"soon":""}">
+        <div class="sd-day">${d.getDate()}</div>
+        <div class="sd-mon">${MON[d.getMonth()]}</div>
+      </div>
+      <div class="ship-body">
+        <div class="ship-to">${escapeHtml(s.to)}<span class="ship-days">${dayLabel}</span></div>
+        ${note}
+      </div>
+      <div class="ship-actions">
+        <button class="ship-mini" data-ship-edit="${s.id}" aria-label="編集" title="編集">✎</button>
+        <button class="ship-mini" data-ship-del="${s.id}" aria-label="削除" title="削除">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function addTask(o){
+  state.tasks.push(Object.assign({id:uid(),done:false,prio:"mid",type:"normal",
+    title:"",due:"",doDate:"",note:"",repeat:null},o));
+  render();
+}
+
+function completeTask(t){
+  if(t.type==="normal"){
+    t.done=!t.done;
+    if(t.done){state.history.push({title:t.title,date:todayStr()});}
+    else{const i=state.history.map(h=>h.title).lastIndexOf(t.title);if(i>=0)state.history.splice(i,1);}
+    render();
+  }else{
+    state.history.push({title:t.title,date:todayStr()});
+    const today=todayStr();
+    const base=(t.doDate&&t.doDate>today)?t.doDate:today;
+    let next=calcNextDo(t,base);
+    if(!next||next<=today){next=calcNextDo(t,today);}
+    t.doDate=next;
+    t.done=false;
+    render();
+  }
+}
+
+function delTask(id){
+  state.tasks=state.tasks.filter(t=>t.id!==id);
+  render();
+}
+
+function editTask(id){
+  const t=state.tasks.find(x=>x.id===id);if(!t)return;
+  const el=document.querySelector(`.task[data-id="${id}"]`);
+  if(el.querySelector(".edit-form")){el.querySelector(".edit-form").remove();return;}
+  const f=document.createElement("div");
+  f.className="edit-form";
+  let inner=`<div class="field"><label>タスク名</label><input type="text" class="e-title" value="${escapeHtml(t.title)}"></div>`;
+  if(t.type==="normal"){
+    inner+=`<div class="field-row">
+      <div class="field"><label>優先度</label>
+        <select class="e-prio">
+          <option value="low"${t.prio==="low"?" selected":""}>低</option>
+          <option value="mid"${t.prio==="mid"?" selected":""}>中</option>
+          <option value="high"${t.prio==="high"?" selected":""}>高</option>
+        </select></div>
+      <div class="field"><label>期日</label><input type="date" class="e-due" value="${t.due||""}"></div>
+      <div class="field"><label>実行日</label><input type="date" class="e-do" value="${t.doDate||""}"></div>
+    </div>`;
+  }else{
+    inner+=`<div class="field"><label>次回の実行日</label><input type="date" class="e-do" value="${t.doDate||""}"></div>`;
+  }
+  inner+=`<div class="field"><label>メモ</label><textarea class="e-note">${escapeHtml(t.note||"")}</textarea></div>
+    <button class="btn e-save">保存</button>
+    <button class="btn-ghost e-cancel">キャンセル</button>`;
+  f.innerHTML=inner;
+  el.appendChild(f);
+  f.querySelector(".e-save").onclick=()=>{
+    t.title=f.querySelector(".e-title").value.trim()||t.title;
+    if(t.type==="normal"){
+      t.prio=f.querySelector(".e-prio").value;
+      t.due=f.querySelector(".e-due").value;
+    }
+    t.doDate=f.querySelector(".e-do").value;
+    t.note=f.querySelector(".e-note").value;
+    render();
+  };
+  f.querySelector(".e-cancel").onclick=()=>f.remove();
+}
+
+document.addEventListener("click",e=>{
+  const act=e.target.closest("[data-act]");
+  if(!act)return;
+  const taskEl=act.closest(".task");if(!taskEl)return;
+  const id=taskEl.dataset.id;
+  const t=state.tasks.find(x=>x.id===id);if(!t)return;
+  const a=act.dataset.act;
+  if(a==="check")completeTask(t);
+  else if(a==="del"){if(confirm("このタスクを削除しますか？"))delTask(id);}
+  else if(a==="edit")editTask(id);
+  else if(a==="note"){const n=taskEl.querySelector("[data-note]");if(n)n.classList.toggle("show");}
+});
+
+function bindToggle(btnId,formId){
+  const btn=document.getElementById(btnId),form=document.getElementById(formId);
+  btn.onclick=()=>{const open=form.classList.toggle("open");btn.classList.toggle("open",open);
+    btn.textContent=open?"×":"＋";
+    if(open){const inp=form.querySelector("input[type=text]");if(inp)inp.focus();}};
+}
+bindToggle("normal-add-toggle","normal-form");
+bindToggle("repeat-add-toggle","repeat-form");
+bindToggle("portal-add-toggle","portal-form");
+bindToggle("ship-add-toggle","ship-form");
+
+// ポータルのカラーピッカー
+let selectedColor=PORTAL_COLORS[0];
+(function(){
+  const pk=document.getElementById("p-color-picker");
+  PORTAL_COLORS.forEach((c,i)=>{
+    const dot=document.createElement("div");
+    dot.className="color-dot"+(i===0?" on":"");
+    dot.style.background=c;dot.dataset.color=c;
+    dot.onclick=()=>{selectedColor=c;pk.querySelectorAll(".color-dot").forEach(d=>d.classList.toggle("on",d===dot));};
+    pk.appendChild(dot);
+  });
+})();
+
+// ポータルの絵文字ピッカー
+const PORTAL_EMOJIS=["🔗","🗂","📊","📈","📋","📁","🗒","📝","🖥","💻","⚙","🔧","🕐","📅","📦","🚚","🏭","🏢","📧","💬","🔍","💰","📞","🌐"];
+let selectedEmoji=PORTAL_EMOJIS[0];
+(function(){
+  const ep=document.getElementById("p-emoji-picker");
+  PORTAL_EMOJIS.forEach((em,i)=>{
+    const b=document.createElement("div");
+    b.className="emoji-opt"+(i===0?" on":"");
+    b.textContent=em;b.dataset.emoji=em;
+    b.onclick=()=>{selectedEmoji=em;ep.querySelectorAll(".emoji-opt").forEach(x=>x.classList.toggle("on",x===b));};
+    ep.appendChild(b);
+  });
+})();
+
+// ポータル追加
+document.getElementById("p-add").onclick=()=>{
+  const name=document.getElementById("p-name").value.trim();
+  let url=document.getElementById("p-url").value.trim();
+  if(!name){alert("名前を入力してください");return;}
+  if(!url){alert("URLを入力してください");return;}
+  if(!/^https?:\/\//i.test(url))url="https://"+url;
+  state.portals.push({id:uid(),name,url,icon:selectedEmoji,color:selectedColor});
+  document.getElementById("p-name").value="";
+  document.getElementById("p-url").value="";
+  render();
+};
+
+// 直送予定 追加
+document.getElementById("s-add").onclick=()=>{
+  const date=document.getElementById("s-date").value;
+  const to=document.getElementById("s-to").value.trim();
+  if(!date){alert("出荷日を入力してください");return;}
+  if(!to){alert("送り先を入力してください");return;}
+  const note=document.getElementById("s-note").value;
+  state.shipments.push({id:uid(),date,to,note});
+  document.getElementById("s-date").value="";
+  document.getElementById("s-to").value="";
+  document.getElementById("s-note").value="";
+  render();
+};
+
+// ポータル・直送の削除／編集（イベント委譲）
+document.addEventListener("click",e=>{
+  const pd=e.target.closest("[data-portal-del]");
+  if(pd){e.preventDefault();if(confirm("このリンクを削除しますか？")){
+    state.portals=state.portals.filter(p=>p.id!==pd.dataset.portalDel);render();}return;}
+  const pe=e.target.closest("[data-portal-edit]");
+  if(pe){e.preventDefault();openPortalEdit(pe.dataset.portalEdit);return;}
+  const sd=e.target.closest("[data-ship-del]");
+  if(sd){if(confirm("この直送予定を削除しますか？")){
+    state.shipments=state.shipments.filter(s=>s.id!==sd.dataset.shipDel);render();}return;}
+  const se=e.target.closest("[data-ship-edit]");
+  if(se){openShipEdit(se.dataset.shipEdit);return;}
+});
+
+const modal=document.getElementById("edit-modal");
+const modalBox=document.getElementById("edit-modal-box");
+function closeModal(){modal.classList.remove("open");modalBox.innerHTML="";}
+modal.addEventListener("click",e=>{if(e.target===modal)closeModal();});
+
+function openPortalEdit(id){
+  const p=state.portals.find(x=>x.id===id);if(!p)return;
+  const colorDots=PORTAL_COLORS.map(c=>`<div class="color-dot${c===p.color?" on":""}" data-c="${c}" style="background:${c};"></div>`).join("");
+  const emojiOpts=PORTAL_EMOJIS.map(em=>`<div class="emoji-opt${em===p.icon?" on":""}" data-e="${em}">${em}</div>`).join("");
+  modalBox.innerHTML=`
+    <h3>リンクを編集</h3>
+    <div class="field"><label>名前</label><input type="text" id="ep-name" value="${escapeHtml(p.name)}"></div>
+    <div class="field"><label>URL</label><input type="text" id="ep-url" value="${escapeHtml(p.url)}"></div>
+    <div class="field"><label>アイコン</label><div class="emoji-picker" id="ep-emoji">${emojiOpts}</div></div>
+    <div class="field"><label>色</label><div class="color-picker" id="ep-color">${colorDots}</div></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="ep-cancel">キャンセル</button>
+      <button class="btn" id="ep-save">保存する</button>
+    </div>`;
+  modal.classList.add("open");
+  let ec=p.color,ee=p.icon;
+  modalBox.querySelector("#ep-emoji").onclick=ev=>{const b=ev.target.closest(".emoji-opt");if(!b)return;
+    ee=b.dataset.e;modalBox.querySelectorAll("#ep-emoji .emoji-opt").forEach(x=>x.classList.toggle("on",x===b));};
+  modalBox.querySelector("#ep-color").onclick=ev=>{const b=ev.target.closest(".color-dot");if(!b)return;
+    ec=b.dataset.c;modalBox.querySelectorAll("#ep-color .color-dot").forEach(x=>x.classList.toggle("on",x===b));};
+  modalBox.querySelector("#ep-cancel").onclick=closeModal;
+  modalBox.querySelector("#ep-save").onclick=()=>{
+    const name=modalBox.querySelector("#ep-name").value.trim();
+    let url=modalBox.querySelector("#ep-url").value.trim();
+    if(!name){alert("名前を入力してください");return;}
+    if(!url){alert("URLを入力してください");return;}
+    if(!/^https?:\/\//i.test(url))url="https://"+url;
+    p.name=name;p.url=url;p.icon=ee;p.color=ec;
+    closeModal();render();
+  };
+}
+
+function openShipEdit(id){
+  const s=state.shipments.find(x=>x.id===id);if(!s)return;
+  modalBox.innerHTML=`
+    <h3>直送予定を編集</h3>
+    <div class="field"><label>出荷日</label><input type="date" id="es-date" value="${s.date}"></div>
+    <div class="field"><label>送り先</label><input type="text" id="es-to" value="${escapeHtml(s.to)}"></div>
+    <div class="field"><label>備考</label><textarea id="es-note">${escapeHtml(s.note||"")}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="es-cancel">キャンセル</button>
+      <button class="btn" id="es-save">保存する</button>
+    </div>`;
+  modal.classList.add("open");
+  modalBox.querySelector("#es-cancel").onclick=closeModal;
+  modalBox.querySelector("#es-save").onclick=()=>{
+    const date=modalBox.querySelector("#es-date").value;
+    const to=modalBox.querySelector("#es-to").value.trim();
+    if(!date){alert("出荷日を入力してください");return;}
+    if(!to){alert("送り先を入力してください");return;}
+    s.date=date;s.to=to;s.note=modalBox.querySelector("#es-note").value;
+    closeModal();render();
+  };
+}
+
+// 時計
+function updateClock(){
+  const now=new Date();
+  const WDJ=["日","月","火","水","木","金","土"];
+  const y=now.getFullYear(),m=now.getMonth()+1,d=now.getDate();
+  document.getElementById("clock-date").textContent=`${y}年${m}月${d}日（${WDJ[now.getDay()]}）`;
+  const hh=String(now.getHours()).padStart(2,"0");
+  const mm=String(now.getMinutes()).padStart(2,"0");
+  document.getElementById("clock-time").textContent=`${hh}:${mm}`;
+}
+updateClock();
+setInterval(updateClock,10000);
+
+// Googleカレンダー接続（次ステップで実装）
+document.getElementById("cal-connect").onclick=()=>{
+  const body=document.getElementById("cal-body");
+  body.innerHTML=`<p class="cal-status">Googleカレンダー連携はこのあと設定します。接続にはGoogle側の許可設定が必要なため、準備ができたらこのボタンから繋げられるようにします。</p>`;
+};
+
+const wp=document.getElementById("weekday-picker");
+WD.forEach((w,i)=>{const c=document.createElement("div");c.className="chip";c.textContent=w;c.dataset.wd=i;
+  c.onclick=()=>c.classList.toggle("on");wp.appendChild(c);});
+const mp=document.getElementById("monthday-picker");
+for(let i=1;i<=31;i++){const c=document.createElement("div");c.className="chip";c.textContent=i;c.dataset.md=i;
+  c.style.padding="5px 9px";c.onclick=()=>c.classList.toggle("on");mp.appendChild(c);}
+
+const yp=document.getElementById("yearly-picker");
+function addYearlyRow(m,d){
+  const row=document.createElement("div");
+  row.style.cssText="display:flex;gap:6px;align-items:center;margin-bottom:6px;width:100%;";
+  row.innerHTML=`<input type="number" class="ym" min="1" max="12" value="${m||1}" style="width:64px;"> 月
+    <input type="number" class="yd" min="1" max="31" value="${d||1}" style="width:64px;"> 日
+    <button class="btn-ghost yrm" style="padding:4px 10px;font-size:13px;">×</button>`;
+  row.querySelector(".yrm").onclick=()=>row.remove();
+  yp.appendChild(row);
+}
+document.getElementById("yearly-add").onclick=()=>addYearlyRow();
+
+document.getElementById("r-rep-type").addEventListener("change",e=>{
+  const v=e.target.value;
+  document.querySelectorAll("#repeat-detail>div").forEach(d=>d.classList.toggle("show",d.dataset.rep===v));
+  if(v==="yearly"&&!yp.children.length)addYearlyRow();
+});
+
+function gatherRepeat(){
+  const type=document.getElementById("r-rep-type").value;
+  const r={type};
+  if(type==="weekly")r.weekdays=[...document.querySelectorAll("#weekday-picker .chip.on")].map(c=>+c.dataset.wd);
+  if(type==="monthly")r.monthdays=[...document.querySelectorAll("#monthday-picker .chip.on")].map(c=>+c.dataset.md);
+  if(type==="everyN")r.n=Math.max(1,+document.getElementById("r-everyN").value||1);
+  if(type==="yearly")r.yeardays=[...yp.querySelectorAll("div")].map(row=>({
+    m:+row.querySelector(".ym").value,d:+row.querySelector(".yd").value}));
+  return r;
+}
+
+function addNormal(){
+  const title=document.getElementById("n-title").value.trim();
+  if(!title){alert("タスク名を入力してください");return;}
+  addTask({title,type:"normal",prio:document.getElementById("n-prio").value,
+    due:document.getElementById("n-due").value,
+    doDate:document.getElementById("n-do").value,
+    note:document.getElementById("n-note").value});
+  document.getElementById("n-title").value="";
+  document.getElementById("n-due").value="";
+  document.getElementById("n-do").value="";
+  document.getElementById("n-note").value="";
+}
+document.getElementById("n-add").onclick=addNormal;
+document.getElementById("n-title").addEventListener("keydown",e=>{if(e.key==="Enter")addNormal();});
+
+function addRepeat(){
+  const title=document.getElementById("r-title").value.trim();
+  if(!title){alert("タスク名を入力してください");return;}
+  const o={title,type:"repeat",note:document.getElementById("r-note").value};
+  o.repeat=gatherRepeat();
+  const manual=document.getElementById("r-do").value;
+  o.doDate=manual||(isDueToday(o)?todayStr():calcNextDo(o,todayStr()));
+  addTask(o);
+  document.getElementById("r-title").value="";
+  document.getElementById("r-do").value="";
+  document.getElementById("r-note").value="";
+}
+document.getElementById("r-add").onclick=addRepeat;
+document.getElementById("r-title").addEventListener("keydown",e=>{if(e.key==="Enter")addRepeat();});
+
+document.getElementById("hist-clear").onclick=()=>{
+  if(confirm("完了履歴をすべて消去しますか？")){state.history=[];render();}
+};
+
+let dragId=null,dragEl=null;
+function onPointerMove(e){
+  if(!dragId)return;
+  const y=e.clientY;
+  const rows=[...document.querySelectorAll('#repeat-list .task')];
+  document.querySelectorAll(".task").forEach(t=>{if(t!==dragEl)t.classList.remove("drag-over");});
+  for(const r of rows){
+    if(r===dragEl)continue;
+    const box=r.getBoundingClientRect();
+    if(y>=box.top&&y<=box.bottom){r.classList.add("drag-over");break;}
+  }
+}
+function onPointerUp(e){
+  document.removeEventListener("pointermove",onPointerMove);
+  document.removeEventListener("pointerup",onPointerUp);
+  if(dragId){
+    const y=e.clientY;
+    const rows=[...document.querySelectorAll('#repeat-list .task')];
+    let targetId=null;
+    for(const r of rows){
+      if(r.dataset.id===dragId)continue;
+      const box=r.getBoundingClientRect();
+      if(y>=box.top&&y<=box.bottom){targetId=r.dataset.id;break;}
+    }
+    if(targetId&&targetId!==dragId){
+      const arr=state.tasks;
+      const from=arr.findIndex(t=>t.id===dragId);
+      const to=arr.findIndex(t=>t.id===targetId);
+      const [moved]=arr.splice(from,1);
+      const newTo=arr.findIndex(t=>t.id===targetId);
+      arr.splice(newTo+(from<to?1:0),0,moved);
+      render();
+    }
+  }
+  document.querySelectorAll(".task").forEach(t=>t.classList.remove("dragging","drag-over"));
+  dragId=null;dragEl=null;
+}
+document.addEventListener("pointerdown",e=>{
+  const h=e.target.closest(".drag-handle");if(!h)return;
+  e.preventDefault();
+  const task=h.closest(".task");if(!task)return;
+  dragId=task.dataset.id;dragEl=task;task.classList.add("dragging");
+  document.addEventListener("pointermove",onPointerMove);
+  document.addEventListener("pointerup",onPointerUp);
+});
+
+document.getElementById("normal-tools").addEventListener("click",e=>{
+  const b=e.target.closest(".tool-btn");if(!b)return;
+  if(b.dataset.sort){
+    normalSort=b.dataset.sort;
+    document.querySelectorAll("#normal-tools [data-sort]").forEach(x=>x.classList.toggle("on",x===b));
+  }else if(b.dataset.filter){
+    const f=b.dataset.filter;
+    normalFilters[f]=!normalFilters[f];
+    b.classList.toggle("on",normalFilters[f]);
+  }
+  render();
+});
+
+load();render();
+</script>
+</body>
+</html>
