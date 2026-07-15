@@ -36,6 +36,13 @@
   h1 .star{color:var(--terracotta);font-size:22px;}
   .subtitle{color:var(--ink-soft);font-size:13px;margin-top:2px;}
 
+  .sync-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+    background:var(--sage-bg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-bottom:14px;}
+  .sync-bar.on{background:var(--sage-bg);}
+  .sync-status{font-size:12.5px;color:var(--ink-soft);}
+  .sync-btn{font-size:12px;padding:5px 12px;border-radius:14px;border:1px solid var(--line);
+    background:var(--white);color:var(--ink);transition:all .12s;}
+  .sync-btn:hover{border-color:var(--sage);background:var(--sage);color:var(--white);}
   .head-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
   .clock{text-align:right;flex-shrink:0;}
   .clock-date{font-size:13px;color:var(--ink-soft);}
@@ -230,9 +237,14 @@
 </style>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <header>
+  <div class="sync-bar" id="sync-bar">
+    <span class="sync-status" id="sync-status">📱 このデバイスのみ（未ログイン）</span>
+    <button class="sync-btn" id="sync-login-btn">ログインして同期</button>
+  </div>
   <div class="head-top">
     <div>
       <h1><span class="star">✳</span>業務ダッシュボード</h1>
@@ -411,11 +423,40 @@
   <div class="modal-box" id="edit-modal-box"></div>
 </div>
 
+<div class="modal-overlay" id="login-modal">
+  <div class="modal-box">
+    <h3>ログインして同期</h3>
+    <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">メールアドレスとパスワードでログインすると、PC・スマホでデータが同期されます。初めての方は下の「新規登録」から。</p>
+    <div class="field"><label>メールアドレス</label><input type="text" id="login-email" placeholder="you@example.com"></div>
+    <div class="field"><label>パスワード</label><input type="password" id="login-pass" placeholder="6文字以上"></div>
+    <p id="login-msg" style="font-size:13px;color:var(--red);min-height:18px;margin-top:4px;"></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="login-cancel">閉じる</button>
+      <button class="btn-ghost" id="login-signup">新規登録</button>
+      <button class="btn" id="login-signin">ログイン</button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 const KEY="mytask_app_v1";
 const WD=["日","月","火","水","木","金","土"];
 let state={tasks:[],history:[],portals:[],shipments:[]};
+
+// ===== Supabase 同期 =====
+const SB_URL="https://bvnjloskjpxrkgqxxuxi.supabase.co";
+const SB_KEY="sb_publishable_v6KMESvaHfN7z6uHQQf34w_4OE1GyLx";
+let sb=null,sbUser=null,syncing=false;
+function initSupabase(){
+  try{
+    if(window.supabase&&window.supabase.createClient){
+      sb=window.supabase.createClient(SB_URL,SB_KEY);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
 
 function load(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r){state=r;}}catch(e){}migrate();}
 function migrate(){
@@ -433,7 +474,25 @@ function migrate(){
   });
   if(changed)save();
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+  pushToCloud();
+}
+let pushTimer=null;
+function pushToCloud(){
+  if(!sb||!sbUser)return;
+  // 連続保存をまとめる（デバウンス）
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(async()=>{
+    try{
+      setSyncStatus("saving");
+      const {error}=await sb.from("app_state").upsert({
+        user_id:sbUser.id,data:state,updated_at:new Date().toISOString()
+      });
+      setSyncStatus(error?"error":"synced");
+    }catch(e){setSyncStatus("error");}
+  },800);
+}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function fmtDate(d){
   const y=d.getFullYear();
@@ -1093,7 +1152,126 @@ document.getElementById("normal-tools").addEventListener("click",e=>{
   render();
 });
 
-load();render();
-</script>
+// ===== 同期のUI・処理 =====
+function setSyncStatus(kind){
+  const el=document.getElementById("sync-status");
+  const bar=document.getElementById("sync-bar");
+  const btn=document.getElementById("sync-login-btn");
+  if(!el)return;
+  if(sbUser){
+    bar.classList.add("on");
+    btn.textContent="ログアウト";
+    const email=sbUser.email||"";
+    if(kind==="saving")el.textContent="🔄 保存中… ("+email+")";
+    else if(kind==="error")el.textContent="⚠ 同期エラー ("+email+")";
+    else el.textContent="✓ 同期中 ("+email+")";
+  }else{
+    bar.classList.remove("on");
+    btn.textContent="ログインして同期";
+    el.textContent="📱 このデバイスのみ（未ログイン）";
+  }
+}
+
+async function pullFromCloud(){
+  if(!sb||!sbUser)return;
+  try{
+    setSyncStatus("saving");
+    const {data,error}=await sb.from("app_state").select("data").eq("user_id",sbUser.id).maybeSingle();
+    if(error){setSyncStatus("error");return;}
+    if(data&&data.data){
+      state=data.data;
+      if(!Array.isArray(state.portals))state.portals=[];
+      if(!Array.isArray(state.shipments))state.shipments=[];
+      if(!Array.isArray(state.tasks))state.tasks=[];
+      if(!Array.isArray(state.history))state.history=[];
+      try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+      render();
+      setSyncStatus("synced");
+    }else{
+      // クラウドにまだ無い→今のローカルデータを初回アップロード
+      await sb.from("app_state").upsert({user_id:sbUser.id,data:state,updated_at:new Date().toISOString()});
+      setSyncStatus("synced");
+    }
+  }catch(e){setSyncStatus("error");}
+}
+
+const loginModal=document.getElementById("login-modal");
+function openLogin(){document.getElementById("login-msg").textContent="";loginModal.classList.add("open");}
+function closeLogin(){loginModal.classList.remove("open");}
+loginModal.addEventListener("click",e=>{if(e.target===loginModal)closeLogin();});
+document.getElementById("login-cancel").onclick=closeLogin;
+
+document.getElementById("sync-login-btn").onclick=async()=>{
+  if(sbUser){
+    if(confirm("ログアウトしますか？（このデバイスのデータは残ります）")){
+      try{await sb.auth.signOut();}catch(e){}
+      sbUser=null;setSyncStatus();
+    }
+  }else{
+    if(!sb&&!initSupabase()){alert("同期機能の準備中です。数秒後にもう一度お試しください。");return;}
+    openLogin();
+  }
+};
+
+async function doAuth(mode){
+  const email=document.getElementById("login-email").value.trim();
+  const pass=document.getElementById("login-pass").value;
+  const msg=document.getElementById("login-msg");
+  if(!email||!pass){msg.textContent="メールアドレスとパスワードを入力してください";return;}
+  if(!sb&&!initSupabase()){msg.textContent="同期機能の準備中です。少し待ってからお試しください。";return;}
+  msg.style.color="var(--ink-soft)";msg.textContent="処理中…";
+  try{
+    let res;
+    if(mode==="signup"){
+      res=await sb.auth.signUp({email,password:pass});
+      if(res.error){msg.style.color="var(--red)";msg.textContent=translateAuthError(res.error.message);return;}
+      if(res.data&&res.data.user&&!res.data.session){
+        msg.style.color="var(--sage)";
+        msg.textContent="確認メールを送りました。メール内のリンクを開いてから、ログインしてください。";
+        return;
+      }
+    }else{
+      res=await sb.auth.signInWithPassword({email,password:pass});
+      if(res.error){msg.style.color="var(--red)";msg.textContent=translateAuthError(res.error.message);return;}
+    }
+    sbUser=res.data.user;
+    closeLogin();
+    setSyncStatus("synced");
+    await pullFromCloud();
+  }catch(e){msg.style.color="var(--red)";msg.textContent="通信に失敗しました。ネット接続を確認してください。";}
+}
+function translateAuthError(m){
+  if(/Invalid login/i.test(m))return "メールアドレスかパスワードが違います。";
+  if(/already registered/i.test(m))return "このメールアドレスは登録済みです。「ログイン」を押してください。";
+  if(/Email not confirmed/i.test(m))return "メール確認が未完了です。確認メールのリンクを開いてください。";
+  if(/at least 6/i.test(m))return "パスワードは6文字以上にしてください。";
+  return m;
+}
+document.getElementById("login-signin").onclick=()=>doAuth("signin");
+document.getElementById("login-signup").onclick=()=>doAuth("signup");
+
+// 起動時：ローカル読込→表示→Supabase準備→既存セッション確認
+async function boot(){
+  load();render();
+  // Supabaseライブラリを待つ
+  let tries=0;
+  const iv=setInterval(async()=>{
+    tries++;
+    if(initSupabase()){
+      clearInterval(iv);
+      try{
+        const {data}=await sb.auth.getSession();
+        if(data&&data.session){sbUser=data.session.user;setSyncStatus("synced");await pullFromCloud();}
+        else{setSyncStatus();}
+      }catch(e){setSyncStatus();}
+      // ログイン状態の変化を監視
+      sb.auth.onAuthStateChange((event,session)=>{
+        sbUser=session?session.user:null;
+        setSyncStatus(sbUser?"synced":undefined);
+      });
+    }else if(tries>20){clearInterval(iv);setSyncStatus();}
+  },300);
+}
+boot();</script>
 </body>
 </html>
