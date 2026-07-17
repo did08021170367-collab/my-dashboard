@@ -550,6 +550,8 @@ function sortNormals(arr){
 function filterNormals(arr){
   const today=todayStr();
   return arr.filter(t=>{
+    // 完了して翌日以降になったタスクは一覧から消す（履歴には残る）
+    if(t.done&&t.doneDate&&t.doneDate<today)return false;
     if(normalFilters.active&&t.done)return false;
     if(normalFilters.high&&t.prio!=="high")return false;
     if(normalFilters.today){if(baseDate(t)>today)return false;}
@@ -733,8 +735,8 @@ function addTask(o){
 function completeTask(t){
   if(t.type==="normal"){
     t.done=!t.done;
-    if(t.done){state.history.push({title:t.title,date:todayStr()});}
-    else{const i=state.history.map(h=>h.title).lastIndexOf(t.title);if(i>=0)state.history.splice(i,1);}
+    if(t.done){t.doneDate=todayStr();state.history.push({title:t.title,date:todayStr()});}
+    else{delete t.doneDate;const i=state.history.map(h=>h.title).lastIndexOf(t.title);if(i>=0)state.history.splice(i,1);}
     render();
   }else{
     state.history.push({title:t.title,date:todayStr()});
