@@ -957,15 +957,15 @@ function updateClock(){
 updateClock();
 setInterval(updateClock,10000);
 
-// ===== Googleカレンダー連携 =====
+// ===== Googleカレンダー連携（自動更新対応）=====
 const GCAL_CLIENT_ID="667308272073-2jnm8ji28il709ufdiea0d7jgfpbvorh.apps.googleusercontent.com";
 const GCAL_SCOPE="https://www.googleapis.com/auth/calendar.readonly";
 const GCAL_DISCOVERY="https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest";
-let gapiReady=false,gisReady=false,tokenClient=null,gcalToken=null;
+let gapiReady=false,gisReady=false,tokenClient=null,gcalToken=null,gcalExpiry=0;
+let gcalRefreshTimer=null,gcalEverConnected=false;
 
-function gcalSetStatus(html){document.getElementById("cal-body").innerHTML=html;}
+function gcalSetStatus(html){const el=document.getElementById("cal-body");if(el)el.innerHTML=html;}
 
-// ライブラリ読み込みを待つ
 function waitForGoogleLibs(){
   const iv=setInterval(()=>{
     if(window.gapi&&window.google&&google.accounts&&google.accounts.oauth2){
@@ -977,16 +977,32 @@ function waitForGoogleLibs(){
           tokenClient=google.accounts.oauth2.initTokenClient({
             client_id:GCAL_CLIENT_ID,scope:GCAL_SCOPE,
             callback:(resp)=>{
-              if(resp.error){gcalSetStatus(`<p class="cal-status">接続に失敗しました。もう一度お試しください。</p>`);return;}
+              if(resp.error){
+                // 無言更新に失敗した場合など
+                if(resp.error==="interaction_required"||resp.error==="login_required"||resp.error==="consent_required"){
+                  showConnectPrompt("接続の更新にはGoogleの再ログインが必要です。");
+                }else{
+                  showConnectPrompt("接続に失敗しました。もう一度お試しください。");
+                }
+                return;
+              }
               gcalToken=resp.access_token;
-              try{sessionStorage.setItem("gcal_token",gcalToken);}catch(e){}
+              gcalExpiry=Date.now()+((resp.expires_in||3600)*1000);
+              gcalEverConnected=true;
+              try{
+                sessionStorage.setItem("gcal_token",gcalToken);
+                localStorage.setItem("gcal_connected","1");
+              }catch(e){}
+              scheduleGcalRefresh();
               loadTodayEvents();
             }
           });
           gisReady=true;
-          // 既存トークンがあれば自動で読み込み
+          // 以前つないだことがあれば、静かに自動接続を試みる
+          let everConnected=null;try{everConnected=localStorage.getItem("gcal_connected");}catch(e){}
           let saved=null;try{saved=sessionStorage.getItem("gcal_token");}catch(e){}
-          if(saved){gcalToken=saved;gapi.client.setToken({access_token:saved});loadTodayEvents();}
+          if(saved){gcalToken=saved;gapi.client.setToken({access_token:saved});loadTodayEvents();scheduleGcalRefresh();}
+          else if(everConnected){silentRefresh();}
         }catch(e){gcalSetStatus(`<p class="cal-status">カレンダー機能の準備中に問題が発生しました。ページを再読み込みしてください。</p>`);}
       });
     }
@@ -994,15 +1010,39 @@ function waitForGoogleLibs(){
 }
 waitForGoogleLibs();
 
+// 無言でトークンを取り直す（Googleセッションが生きていれば画面は出ない）
+function silentRefresh(){
+  if(!gisReady||!tokenClient)return;
+  try{tokenClient.requestAccessToken({prompt:"none"});}catch(e){}
+}
+
+// 期限の少し前に先回りして自動更新をスケジュール
+function scheduleGcalRefresh(){
+  clearTimeout(gcalRefreshTimer);
+  // 期限の5分前、最短でも1分後、最長25分後に更新
+  let wait=gcalExpiry-Date.now()-5*60*1000;
+  if(wait<60*1000)wait=60*1000;
+  if(wait>25*60*1000)wait=25*60*1000;
+  gcalRefreshTimer=setTimeout(()=>{silentRefresh();},wait);
+}
+
+// 手動接続（ボタン）：まず無言、ダメなら画面
 function gcalConnect(){
   if(!gisReady||!tokenClient){gcalSetStatus(`<p class="cal-status">準備中です。数秒待ってからもう一度押してください。</p>`);return;}
-  gcalSetStatus(`<p class="cal-status">Googleの許可画面を開いています…</p>`);
-  tokenClient.requestAccessToken({prompt:gcalToken?"":"consent"});
+  gcalSetStatus(`<p class="cal-status">接続しています…</p>`);
+  tokenClient.requestAccessToken({prompt:gcalEverConnected?"":"consent"});
+}
+
+function showConnectPrompt(msg){
+  gcalSetStatus(`<p class="cal-status">${msg||"Googleカレンダーと接続してください。"}</p>
+    <button class="btn-ghost cal-connect" id="cal-connect" style="margin-top:8px;">接続する</button>`);
+  const b=document.getElementById("cal-connect");if(b)b.onclick=gcalConnect;
 }
 
 async function loadTodayEvents(){
   if(!gapiReady){return;}
-  gcalSetStatus(`<p class="cal-status">予定を読み込んでいます…</p>`);
+  // 期限切れが近ければ先に静かに更新
+  if(gcalToken&&gcalExpiry&&Date.now()>gcalExpiry-60*1000){silentRefresh();}
   try{
     if(gcalToken)gapi.client.setToken({access_token:gcalToken});
     const now=new Date();
@@ -1014,20 +1054,23 @@ async function loadTodayEvents(){
     });
     renderEvents(resp.result.items||[]);
   }catch(e){
-    // トークン切れなどは再接続を促す
-    let btn=`<button class="btn-ghost cal-connect" id="cal-connect">再接続する</button>`;
-    gcalSetStatus(`<p class="cal-status">予定の取得に失敗しました。接続の有効期限が切れた可能性があります。</p>${btn}`);
+    // 取得失敗（トークン切れ等）→まず無言更新を試みる
     try{sessionStorage.removeItem("gcal_token");}catch(_){}
     gcalToken=null;
-    document.getElementById("cal-connect").onclick=gcalConnect;
+    if(gcalEverConnected||localStorage.getItem("gcal_connected")){
+      gcalSetStatus(`<p class="cal-status">接続を更新しています…</p>`);
+      silentRefresh();
+    }else{
+      showConnectPrompt("予定の取得に失敗しました。");
+    }
   }
 }
 
 function renderEvents(items){
   if(!items.length){
     gcalSetStatus(`<p class="cal-status">今日の予定はありません。</p>
-      <button class="btn-ghost cal-connect" id="cal-refresh" style="margin-top:6px;">更新</button>`);
-    document.getElementById("cal-refresh").onclick=loadTodayEvents;
+      <div style="text-align:right;margin-top:6px;"><button class="btn-ghost" id="cal-refresh" style="font-size:11px;padding:4px 10px;">更新</button></div>`);
+    const r=document.getElementById("cal-refresh");if(r)r.onclick=loadTodayEvents;
     return;
   }
   const rows=items.map(ev=>{
@@ -1047,8 +1090,16 @@ function renderEvents(items){
     return `<div class="cal-event"><span class="ce-time">${timeLabel}</span><span class="ce-title">${escapeHtml(ev.summary||"（無題）")}</span></div>`;
   }).join("");
   gcalSetStatus(rows+`<div style="text-align:right;margin-top:6px;"><button class="btn-ghost" id="cal-refresh" style="font-size:11px;padding:4px 10px;">更新</button></div>`);
-  document.getElementById("cal-refresh").onclick=loadTodayEvents;
+  const r=document.getElementById("cal-refresh");if(r)r.onclick=loadTodayEvents;
 }
+
+// タブに戻ってきたときも、必要なら静かに更新して最新の予定を表示
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"&&(gcalEverConnected||localStorage.getItem("gcal_connected"))){
+    if(!gcalToken||Date.now()>gcalExpiry-60*1000){silentRefresh();}
+    else{loadTodayEvents();}
+  }
+});
 
 document.getElementById("cal-connect").onclick=gcalConnect;
 
